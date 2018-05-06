@@ -1,0 +1,64 @@
+--[[
+	Simple module for allowing item spawns up to a given max number of spawns.
+	
+	Constructor takes three arguments:
+	   item    PVInstance  Some object to spawn. Must be a ROBLOX Object. REQD
+	   parent  PVInstance  The object to parent spawned objects into. 
+	                         Defaults to Workspace. OPT
+	   maxNum  int         The max number of spawns to allow at a time.
+	                         By default, there is no restriction - any number of spawns
+	                         will be allowed.
+	
+	Has one method:
+	  spawn () : bool
+	    Purpose: Spawns the object.
+	     Result: False if the spawn would be over the max # of spawns; true otherwise.
+--]]
+
+local Spawner = { };
+local S       = { };
+
+local count = require (script.Count);
+
+-- ** Constructor ** --
+function S.new (item, parent, maxNum)
+	assert (item, " The item is a required argument.");
+	if (not parent) then parent = workspace; end
+	
+	return setmetatable ({
+		_item = item,
+		_itemName = item.Name,
+		_par  = parent,
+		_max  = maxNum
+	}, Spawner);
+end
+
+-- ** Public Methods ** --
+function Spawner:spawn ()
+	if (self:_reachedMax ()) then return false end
+	return self:_doSpawn ();
+end
+function Spawner:name ()
+	return self._itemName;
+end
+
+
+-- ** Private Methods ** --
+-- Check if max # spawns reached
+function Spawner:_reachedMax ()
+	if (not self._max) then return true; end
+	return count (self._par, self._itemName) > self._max;
+end
+
+-- Spawn the object
+function Spawner:_doSpawn ()
+	if (not self._item) then return false end
+
+	local new = self._item:Clone ();
+	new.Parent = self._par;
+	
+	return true;
+end
+
+Spawner.__index = Spawner;
+return S;

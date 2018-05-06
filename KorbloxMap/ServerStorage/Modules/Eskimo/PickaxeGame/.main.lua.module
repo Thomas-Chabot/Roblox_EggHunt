@@ -1,0 +1,162 @@
+--[[
+	The main module for the Pickaxe Game.
+	Can be used to play a single game, where a position is selected at random
+	  from the Ice Block Door & the player must pick at this position in each round.
+	There are a number of rounds, provided as an argument for the module,
+	  after which the game will end.
+	
+	Constructor:
+	  Arguments:
+	    iceBlock  BasePart  Some part from which the game will be played;
+	    numRounds integer   The number of rounds to be played
+	
+	Methods:
+	  start ()
+	    Starts a new game. Round is reset to 0 & a position is selected.
+	  pick (positions : Array of Vector3) : bool
+	    Updates positions at which the player picked, either proceeding to the next
+	      round or ending the game.
+	    Arguments:
+	      positions  Array of Vector3  An array of positions where the player picked.
+	    Returns: Boolean. This will be true if the pick was valid (the player has moved
+	               into the next round) and false if the pick caused a game over.
+	
+	Events:
+	  GameOver()
+	    Fires when the game has ended because a player picked at the wrong position.
+	  GameWin()
+	    Fires when the game has ended because a player has gone through each round.
+	  PositionUpdated(position : Vector3)
+	    Fires when a new position has been selected as the goal position.
+	    The event will be passed in the goal position as its argument.
+	
+	Note that if this game is to be played for many players, each player should have
+	 their own PickaxeGame object. Each will only work for a single player.
+--]]
+
+local PickaxeGame = { };
+local PG          = { };
+
+local MAX_MAG = 10;
+
+local servStorage = game:GetService ("ServerStorage");
+local modules     = servStorage:FindFirstChild ("Modules");
+
+local Positioning = require (modules.Positioning);
+
+-- ** Constructor ** --
+function PG.new (iceBlock, num)
+	return setmetatable ({
+		_numRounds = num,
+		_block     = iceBlock,
+		
+		_current = 1,
+		
+		_checkDelay = 0.1, -- in seconds, delay between checks
+		
+		_selectedPosition = nil,
+		_maxMagnitude     = MAX_MAG,
+		
+		_didCheck = false,
+		
+		PositionUpdated = Instance.new("BindableEvent"),
+		
+		GameOver = Instance.new("BindableEvent"),
+		GameWin  = Instance.new("BindableEvent"),
+	}, PickaxeGame);
+end
+
+-- ** Public Methods ** --
+function PickaxeGame:start ()
+	self:_reset ();
+	self:_update ();
+end
+
+function PickaxeGame:pick (positions)
+	if (self._didCheck) then return end
+	self._didCheck = true;
+	self:_startCheckTimeout ();
+	
+	local result = self:_check (positions);	
+	if (not result) then
+		print ("Firing the GameOver event");
+		self.GameOver:Fire ();
+		return false;
+	else
+		self:_nextRound ();
+		return true;
+	end
+end
+
+-- ** Private Methods ** --
+-- Pick timeout - delay additional picks
+function PickaxeGame:_startCheckTimeout ()
+	spawn (function ()
+		wait (self._checkDelay);
+		self._didCheck = false;
+	end)
+end
+
+-- Move to next round
+function PickaxeGame:_nextRound ()
+	-- Increment the counters
+	self:_incRound ();
+	if (self:_playerWon()) then
+		return
+	end
+	
+	-- Update the game
+	self:_update ();
+end
+
+-- Check if a pick was good
+function PickaxeGame:_check (positions)
+	local correct = false;
+	for _,pos in pairs (positions) do
+		if (self:_isAccurate (pos)) then
+			correct = true;
+		end
+	end
+	return correct;
+end
+function PickaxeGame:_isAccurate (pos)
+	return (pos - self._selectedPosition).magnitude < self._maxMagnitude;
+end
+
+-- Rounds
+function PickaxeGame:_incRound ()
+	self._current = self._current + 1;
+end
+function PickaxeGame:_getRound ()
+	return self._current;
+end
+
+-- Winning
+function PickaxeGame:_checkWin ()
+	return self:_getRound() >= self._numRounds;
+end
+function PickaxeGame:_playerWon ()
+	if (self:_checkWin ()) then
+		self.GameWin:Fire ();
+		return true;
+	end
+	return false;
+end
+
+-- Move to next round / run the game
+function PickaxeGame:_update ()
+	self:_randomizeArrow ();
+end
+function PickaxeGame:_reset ()
+	self._current = 1;
+	self._maxMagnitude = MAX_MAG;
+end
+function PickaxeGame:_randomizeArrow ()
+	local position         = Positioning.randomFromPart (self._block);
+	self._selectedPosition = position;
+	
+	self.PositionUpdated:Fire (position)
+end
+
+PickaxeGame.__index = PickaxeGame;
+return PG;

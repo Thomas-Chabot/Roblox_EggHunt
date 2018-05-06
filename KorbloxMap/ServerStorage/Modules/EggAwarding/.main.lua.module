@@ -1,0 +1,119 @@
+--[[
+	Handles awarding eggs.
+	
+	Constructor:
+		Awarding.new (egg : Object, eggName : string, badgeId : integer)
+			The egg should be the game object (eg. Model, Part, ...).
+			The egg should be the name of the egg (will be used for notifications)
+			The BadgeId should be the badge to award with the egg.
+	
+	Methods:
+		award (player : Player)
+			Awards the egg to the given player.
+			Side-Effects:
+				- Will notify the player that the egg has been awarded
+	
+	Dependencies:
+		- Requires a RemoteEvents folder to be created under ReplicatedStorage
+		- Will create the "EggAwarded" event which players can listen for,
+		    notifying them when they have received an egg. This will only fire
+		    if they have not already received the egg (i.e., new eggs)
+		
+	Events:
+		This will fire a RemoteEvent (game.ReplicatedStorage.RemoteEvents.EggAwarded)
+		 for a player when they have received an egg.
+		The event will be passed two arguments:
+		  eggName - The name of the egg (same as provided in the constructor)
+		  egg     - The egg itself (this is the 3D object of the egg)
+--]]
+
+
+local EggAwarding = { };
+local EA          = { }; -- Money hungry company.
+
+local badgeService = game:GetService("BadgeService");
+
+local replStorage = game:GetService("ReplicatedStorage");
+local remoteEvents = replStorage:FindFirstChild ("RemoteEvents");
+
+local EVENT_NAME = "EggAwarded";
+
+function EA.new (egg, eggName, badgeId)
+	assert (egg, " Egg is a required argument.");
+	assert (eggName, " The eggName is a required argument.");
+	assert (badgeId, " Badge ID is a required argument.");
+	
+	local awarding = setmetatable({
+		_badgeId = badgeId,
+		_egg     = egg,
+		_eggName = eggName,
+		
+		_isAwarding = false,
+		_event   = nil
+	}, EggAwarding);
+	
+	awarding:_init ();
+	return awarding;
+end
+
+function EggAwarding:award (player)
+	if (self._isAwarding) then return end
+	self._isAwarding = true;
+	
+	self:_awardBadge (player);
+	
+	self._isAwarding = false;
+end
+
+-- ** Private Methods **
+-- Initialization
+function EggAwarding:_init ()
+	self:_initDependencies ();
+end
+
+-- Dependencies
+function EggAwarding:_initDependencies ()
+	-- The RemoteEvent "EggAwarded" must exist ... Add this if it does not
+	self:_initRemoteEvent ();
+end
+function EggAwarding:_initRemoteEvent ()
+	local evt = remoteEvents:FindFirstChild (EVENT_NAME);
+	if (not evt) then
+		evt = Instance.new ("RemoteEvent");
+		evt.Name = EVENT_NAME;
+		evt.Parent = remoteEvents;
+	end
+	
+	self._event = evt;
+end
+
+-- Badges
+function EggAwarding:_awardBadge (player)
+	-- Only award the badge if it exists
+	if (self._badgeId == nil) then return end
+	
+	-- If they just got the badge, notify them!
+	if (not badgeService:UserHasBadge (player.UserId, self._badgeId)) then
+		self:_fireAwardedEvent (player);
+	end
+	
+	-- Award the badge
+	badgeService:AwardBadge(player.UserId, self._badgeId);
+end
+
+function EggAwarding:_fireAwardedEvent (player)
+	assert (self._event, " The event was not initialized");
+	
+	local egg = self._egg:Clone ();
+	egg.Parent = game.ReplicatedStorage
+	self._event:FireClient (player, self._eggName, egg);
+end
+
+-- Deleting the egg, once it's been awarded
+function EggAwarding:_remove ()
+	self._egg:Destroy ();
+end
+
+
+EggAwarding.__index = EggAwarding;
+return EA;

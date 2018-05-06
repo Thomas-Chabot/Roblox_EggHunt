@@ -1,0 +1,31 @@
+local Events = { };
+
+Events.GameOver = Instance.new ("BindableEvent");
+Events.GameWin = Instance.new ("BindableEvent");
+Events.PositionChanged = Instance.new ("BindableEvent");
+
+-- combine two tables
+function combine (t1, t2)
+	for _,value in pairs (t2) do
+		table.insert (t1, value);
+	end
+	return t1;
+end
+
+-- bind helper
+function bind (firing, recipient, ...)
+	local args = {...};
+	firing.Event:connect (function (...)
+		local args = combine ({...}, args);
+		recipient:Fire (unpack (args));
+	end)
+end
+
+-- Main function
+function Events.bind (minigame, player)
+	bind (minigame.GameWin, Events.GameWin, player);
+	bind (minigame.GameOver, Events.GameOver, player);
+	bind (minigame.PositionUpdated, Events.PositionChanged, player)
+end
+
+return Events;

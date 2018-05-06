@@ -1,0 +1,139 @@
+--[[
+	Displays a provided model directly in front of the camera.
+	
+	Constructor:
+		Show3D.new (model : PVInstance, duration : number)
+			model     PVInstance  The model to show - the target to zoom into;
+			duration  number      The length of the zoom in effect. Defaults to 1
+	
+	Methods:
+		show (zoomPercentage : number)
+			Zooms into the target at the given zoomPercentage.
+			zoomPercentage must be between 0 and 1. Higher values zoom in further.
+		hide ()
+			Removes the zoom effect, returning the camera to the player.
+		remove ()
+			Removes the zoom effect, if in progress, and deletes the module.
+--]]
+
+local Show3D = { };
+local S3D    = { };
+
+local Character = require (script.Character).init ();
+
+local DEF_DURATION = 1;
+local DEF_ZOOM     = 0.6;
+
+local CAM_DISTANCE = 15;
+
+local Zoom = require (script.CameraZoom);
+
+function S3D.new (model, duration)
+	if (not duration) then duration = DEF_DURATION; end
+	
+	local s3d = setmetatable({
+		_thing = model,
+		_cam   = Zoom.new (duration)
+	}, Show3D);
+	
+	s3d:_init ();
+	return s3d;
+end
+
+function Show3D:show (zoom)
+	self:_show (zoom);
+end
+function Show3D:hide ()
+	self:_hide ();
+end
+function Show3D:remove ()
+	self:_remove ();
+end
+
+function Show3D:wait ()
+	self._cam:wait ();
+end
+
+-- ** Private Methods ** --
+-- Initialization
+function Show3D:_init ()
+	local p = self._thing;
+	if (not p) then return end
+	
+	for _,obj in pairs (p:GetDescendants()) do
+		if (obj:IsA("Script")) then
+			obj:Destroy()
+		elseif (obj:IsA("BasePart")) then
+			obj.CanCollide = false;
+		end
+	end
+	
+	p.Parent = workspace;
+end
+
+-- Main helper functions
+function Show3D:_show ()
+	self:_setCamScriptable ();
+	self:_setPositioning();
+	
+	Character:hide();
+	self:_zoomIn ();
+end
+function Show3D:_hide ()
+	self:_resetCamera ();
+	Character:show();
+end
+function Show3D:_remove ()
+	self:_hide();
+	self._thing:Destroy ();
+end
+
+function Show3D:_getPrimaryPart ()
+	local p = self._thing;
+	if (p:IsA("Model")) then
+		return p.PrimaryPart;
+	end
+	return p;
+end
+
+-- Positioning
+function Show3D:_setPositioning ()
+	local cam = self:_getCamera ();
+	local camCF = cam.CFrame;
+	local camLV = camCF.lookVector;
+	
+	local newPos = camCF.p + (camLV * CAM_DISTANCE);
+	
+	self:_getPrimaryPart().CFrame = CFrame.new (newPos, camCF.p);
+	self:_getPrimaryPart().Anchored = true;
+end
+
+-- The camera zooming modules
+function Show3D:_zoomIn (percentage)
+	if (not percentage) then percentage = DEF_ZOOM; end
+	self._cam:zoomIn (self:_getPrimaryPart().CFrame, percentage);
+end
+function Show3D:_resetZoom ()
+	self._cam:zoomOut ();
+end
+
+function Show3D:_resetCamera ()
+	self:_resetZoom ();	
+	self:_setCamCustom ();
+end
+
+function Show3D:_setCamScriptable ()
+	local cam = self:_getCamera ();
+	cam.CameraType = Enum.CameraType.Scriptable;
+end
+function Show3D:_setCamCustom ()
+	local cam = self:_getCamera ();
+	cam.CameraType = Enum.CameraType.Custom; -- Default
+end
+
+function Show3D:_getCamera ()
+	return workspace.CurrentCamera;
+end
+
+Show3D.__index = Show3D;
+return S3D;

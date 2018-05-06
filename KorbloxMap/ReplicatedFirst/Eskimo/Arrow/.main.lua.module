@@ -1,0 +1,25 @@
+-- TO BE MADE
+local Arrow = { };
+local A     = { };
+
+local replStorage = game:GetService ("ReplicatedStorage");
+local modules     = replStorage:WaitForChild ("Modules");
+local ArrowAnim   = require (modules.ArrowAnim);
+
+function A.new (direction, distance)
+	return setmetatable ({
+		_arrow = ArrowAnim.new (direction, distance)
+	}, Arrow);
+end
+
+function Arrow:move (position)
+	self._arrow:start (position);
+end
+
+function Arrow:remove ()
+	self._arrow:stop ();
+end
+
+Arrow.__index = Arrow;
+
+return A;

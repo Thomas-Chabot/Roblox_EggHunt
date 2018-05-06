@@ -1,0 +1,61 @@
+local Character = { };
+local C         = { };
+
+function C.init ()
+	return setmetatable ({
+		_player = game.Players.LocalPlayer
+	}, Character);
+end
+
+function Character:hide ()
+	self:_hide ();
+end
+function Character:show ()
+	self:_show ();
+end
+
+-- Main
+function Character:_hide ()
+	local parts = self:_getParts ();
+	for _,part in pairs (parts) do
+		self:_saveTransparency (part);
+		part.Transparency = 1;
+	end
+end
+function Character:_show ()
+	local parts = self:_getParts ();
+	for _,part in pairs (parts) do
+		part.Transparency = self:_loadTransparency (part);
+	end
+end
+
+-- Transparency saving
+function Character:_saveTransparency (part)
+	local tv = Instance.new ("NumberValue", part);
+	tv.Name  = "TransVal";
+	tv.Value = part.Transparency;
+end
+function Character:_loadTransparency (part)
+	return part:FindFirstChild("TransVal") and part.TransVal.Value;
+end
+
+-- Getters
+function Character:_getCharacter ()
+	return self._player and self._player.Character;
+end
+function Character:_getParts ()
+	local character = self:_getCharacter ();
+	if (not character) then return end
+	
+	local parts = { };
+	for _,obj in pairs (character:GetDescendants()) do
+		if (obj:IsA("BasePart")) then
+			table.insert (parts, obj);
+		end
+	end
+	
+	return parts;
+end
+
+Character.__index = Character;
+return C;

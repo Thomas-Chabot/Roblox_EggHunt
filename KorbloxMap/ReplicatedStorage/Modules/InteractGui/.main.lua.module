@@ -1,0 +1,83 @@
+--[[
+	Controls a simple Interaction GUI.
+	Provides a button for interacting with something,
+	 returning an event fired when the player has clicked the Interact button.
+	
+	Constructor takes one argument (optional):
+	  Player  - Player -  The player to give the interact GUI to. Defaults to LocalPlayer;
+	                       (in this case, can only run locally)
+	
+	Has three methods:
+	  show ()
+	    Shows the interact button
+	  hide ()
+	    Hides the interact button
+	  remove ()
+	    Removes the interact button (no further method calls will work)
+	
+	Has one event:
+	  Interaction ()
+	    No arguments. Called when the player has pressed the Interact button.
+--]]
+
+local InteractGui = { };
+local IG          = { };
+
+local gui = script.InteractGui:Clone ();
+
+function IG.new (player)
+	if (not player) then player = game.Players.LocalPlayer; end
+	
+	local gui = setmetatable ({
+		_player = player,
+		_pGui   = player:FindFirstChild ("PlayerGui"),
+		_gui    = gui:Clone (),
+		
+		_removed = false,
+		
+		Interaction = Instance.new ("BindableEvent")
+	}, InteractGui);
+	
+	gui:_init ();
+	return gui;
+end
+
+-- ** Public Methods ** --
+function InteractGui:show ()
+	if (self._removed) then return end
+	self._gui.Parent = self:_playerGui();
+end
+
+function InteractGui:hide ()
+	if (self._removed) then return end
+	self._gui.Parent = nil;
+end
+
+function InteractGui:remove ()
+	self._removed = true;
+	self._gui:Destroy ();
+end
+
+-- ** Private Methods ** --
+-- Event handling
+function InteractGui:_init ()
+	self:_initEvents ();
+end
+function InteractGui:_initEvents ()
+	local btn = self._gui.InteractButton;
+	btn.MouseButton1Click:connect (function ()
+		self.Interaction:Fire ();
+		self:hide ();
+	end)
+end
+
+-- Getting the Player GUI
+function InteractGui:_playerGui ()
+	if (self._pGui) then return self._pGui; end
+	
+	self._pGui = self._player:FindFirstChild("PlayerGui");
+	return self._pGui;
+end
+
+InteractGui.__index = InteractGui;
+return IG;

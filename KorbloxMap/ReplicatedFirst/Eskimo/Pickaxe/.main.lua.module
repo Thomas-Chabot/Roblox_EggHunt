@@ -1,0 +1,30 @@
+local Pickaxe = { };
+
+local Spawner = require (script.Spawner);
+local player  = game.Players.LocalPlayer;
+
+local PICKAXE_NAME = "Pickaxe";
+
+function Pickaxe:spawn ()
+	return Spawner:spawn ();
+end
+
+function Pickaxe:remove ()
+	local name = PICKAXE_NAME;
+	local back = player and player:FindFirstChild("Backpack");
+	local char = player and player.Character;
+	
+	self:_clear (back, name);
+	self:_clear (char, name);
+end
+
+function Pickaxe:_clear (parent, name)
+	print (parent, name, parent:FindFirstChild (name));
+	if (not parent) then return end
+	
+	while (parent:FindFirstChild (name)) do
+		parent [name]:Destroy ()
+	end
+end
+
+return Pickaxe;

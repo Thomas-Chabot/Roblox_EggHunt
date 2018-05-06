@@ -1,0 +1,14 @@
+local Notify = { };
+local N      = { };
+
+local replStorage = game:GetService("ReplicatedStorage");
+local events      = replStorage:WaitForChild ("RemoteEvents");
+
+local EggNotif    = require (script.EggNotification);
+
+local notifyEvt   = events:WaitForChild ("EggAwarded");
+
+notifyEvt.OnClientEvent:connect (function (eggName, egg)
+	local notif = EggNotif.new (egg);
+	notif:notify ();
+end)

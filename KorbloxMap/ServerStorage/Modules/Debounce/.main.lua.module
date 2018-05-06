@@ -1,0 +1,22 @@
+-- Returns a function which can be used to automatically apply debounce
+
+function debounce (f)
+	local db = false;
+	
+	return function (...)
+		if (db) then return end
+		db = true;
+		
+		-- Note: pcalling here in case f errors,
+		--       we still need to reset the debounce
+		local args = {...}
+		pcall (function ()
+			f (unpack (args));
+		end)
+		
+		wait()
+		db = false;
+	end
+end
+
+return debounce;

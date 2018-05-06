@@ -1,0 +1,37 @@
+local Giver = { };
+local G     = { };
+
+local replStorage = game:GetService ("ReplicatedStorage");
+local modules     = replStorage:FindFirstChild ("Modules");
+local count       = require (modules.Count);
+
+function G.new (pickaxe)
+	return setmetatable ({
+		_pickaxe = pickaxe
+	}, Giver);
+end
+
+function Giver:give (player)
+	local count = self:_count (player);
+	if (count >= 1) then return end
+	
+	self:_giveToPlayer (player);
+end
+
+function Giver:_count (player)
+	if (not player) then return false end;
+	
+	local name = self._pickaxe.Name;
+	
+	local backpack  = player:FindFirstChild ("Backpack");
+	local character = player.Character;
+	
+	return count (character, name) + count (backpack, name);
+end
+
+function Giver:_giveToPlayer (player)
+	self._pickaxe:Clone ().Parent = player.Backpack;
+end
+
+Giver.__index = Giver;
+return G;

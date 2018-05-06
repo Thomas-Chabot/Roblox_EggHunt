@@ -1,0 +1,535 @@
+--[[
+
+Documentation:
+
+Methods:
+	touchMod:connect([BasePart] mainPart, [Function] func, [Boolean] runWhilstTouching (defaults to false))
+		> calls func whenever a BasePart touches mainPart
+		> if runWhilstTouching is true then it will repeatedly call func every RunService.Stepped (whilst it's touching)
+		> func can have two parameters (obj1, obj2, intersections) where obj1 is the part it touched, obj2 is mainPart and intersections is a table of intersection points
+		> func won't be called on parts already touching mainPart when first connected
+		> this supports the parent of mainPart changing
+	
+	touchMod:connect([Model] mainModel, [Function] func, [Boolean] runWhilstTouching (defaults to false))
+		> everything is same as above method except for the info below
+		> first parameter is a model so func is called whenever an object touches any descendant in mainModel
+		> func is ran per model_touching_part, not per descendant_touching_part (so even if a part is touching multiple descendants of mainModel, func will still only be called once for that touching part)
+		> the obj2 parameter in func will be the descendant in mainModel which first touched the touching part (obj1 parameter)
+		> func won't be called on parts in mainModel touching each other
+		> this supports descendants being added and removed
+
+	touchMod:getTouching([BasePart] mainPart)
+		> returns dictionary of parts touching mainPart and intersection points
+		> key 'touching' represents the touching part
+		> key 'part' represents mainPart
+		> key 'intersections' represents the table of intersection points
+
+	touchMod:getTouching([Model] mainModel)
+		> everything is same as above method except for the info below
+		> first parameter is a model so it returns data for all parts touching descendants of mainModel
+		> key 'part' represents the descendant in mainModel which first touched the touching part ('touching')
+		> it will not return data for any descendants of mainModel touching each other
+
+
+Example usage can be found at the bottom of the script
+
+Credit goes to EgoMoose for the rotatable region3 module
+
+]]
+
+local region = {} do
+	local insert = table.insert 
+	local tsort = table.sort 
+	local max = math.max 
+	local min = math.min 
+	local abs = math.abs 
+	local cframe = CFrame.new 
+	local vector3 = Vector3.new 
+	local fromNormal = Vector3.FromNormalId
+	local nC = cframe()
+	local nV = vector3()
+	local cross = nV.Cross
+	local dot = nV.Dot
+	local enumItems = Enum.NormalId:GetEnumItems()
+	local vectorToWorldSpace = nC.vectorToWorldSpace
+	local origRegion3 = Region3.new 
+	local findPartsInRegion3 = workspace.FindPartsInRegion3
+	local findPartsInRegion3WithIgnoreList = workspace.FindPartsInRegion3WithIgnoreList
+
+	local function shallowcopy(t)
+		local nt = {}
+		for k, v in next, t do
+			nt[k] = v
+		end
+		return nt
+	end
+
+	local function planeIntersect(point, vector, origin, normal)
+		local rpoint = point - origin
+		local t = -dot(rpoint, normal) / dot(vector, normal)
+		return point + t * vector, t
+	end
+
+	local function getCorners(cf, size)
+		local size, corners = size / 2, {}
+		for x = -1, 1, 2 do
+			for y = -1, 1, 2 do
+				for z = -1, 1, 2 do
+					insert(corners, (cf * cframe(size * vector3(x, y, z))).p)
+				end
+			end
+		end
+		return corners
+	end
+
+	local function getAxis(c1, c2)
+		local axis = {}
+		axis[1] = (c1[2] - c1[1]).unit;
+		axis[2] = (c1[3] - c1[1]).unit;
+		axis[3] = (c1[5] - c1[1]).unit;
+		axis[4] = (c2[2] - c2[1]).unit;
+		axis[5] = (c2[3] - c2[1]).unit;
+		axis[6] = (c2[5] - c2[1]).unit;
+		axis[7] = cross(axis[1], axis[4]).unit;
+		axis[8] = cross(axis[1], axis[5]).unit;
+		axis[9] = cross(axis[1], axis[6]).unit;
+		axis[10] = cross(axis[2], axis[4]).unit;
+		axis[11] = cross(axis[2], axis[5]).unit;
+		axis[12] = cross(axis[2], axis[6]).unit;
+		axis[13] = cross(axis[3], axis[4]).unit;
+		axis[14] = cross(axis[3], axis[5]).unit;
+		axis[15] = cross(axis[3], axis[6]).unit;
+		return axis
+	end
+
+	local function testAxis(corners1, corners2, axis, surface)
+		if axis.Magnitude == 0 or tostring(axis) == "NAN, NAN, NAN" then
+			return true
+		end
+		local adists, bdists = {}, {}
+		for i = 1, 8 do
+			insert(adists, dot(corners1[i], axis))
+			insert(bdists, dot(corners2[i], axis))
+		end
+		local amax, amin = max(unpack(adists)), min(unpack(adists))
+		local bmax, bmin = max(unpack(bdists)), min(unpack(bdists))
+		local longspan = max(amax, bmax) - min(amin, bmin)
+		local sumspan = amax - amin + bmax - bmin
+		local pass, mtv
+		if surface then
+			pass = longspan <= sumspan
+		else
+			pass = longspan < sumspan
+		end
+		if pass then
+			local overlap = amax > bmax and -(bmax - amin) or (amax - bmin)
+			mtv = axis * overlap
+		end
+		return pass, mtv
+	end
+
+	function region.new(cf, size)
+		local self = setmetatable({}, {__index = region})
+		self.surfaceCountsAsCollision = true
+		self.cframe = cf
+		self.size = size
+		self.planes = {}
+		self.corners = getCorners(self.cframe, self.size)
+		for _, enum in next, enumItems do
+			local lnormal = fromNormal(enum)
+			local wnormal = vectorToWorldSpace(self.cframe, lnormal)
+			local distance = (lnormal * self.size/2).magnitude
+			local point = self.cframe.p + wnormal * distance
+			insert(self.planes, {
+				normal = wnormal;
+				point = point;
+			})
+		end	
+		return self
+	end
+
+	function region.fromPart(part)
+		return region.new(
+			part.CFrame,
+			part.Size
+		)
+	end
+
+	function region:castPart(part)
+		local corners1 = self.corners
+		local corners2 = getCorners(part.CFrame, part.Size)
+		local axis, mtvs = getAxis(corners1, corners2), {}
+		for i = 1, #axis do
+			local intersect, mtv = testAxis(corners1, corners2, axis[i], self.surfaceCountsAsCollision)
+			if not intersect then return false, nV end
+			if mtv then insert(mtvs, mtv) end
+		end
+		tsort(mtvs, function(a, b) return a.magnitude < b.magnitude end)
+		return true, mtvs[1]
+	end
+
+	function region:intersectionPoints(part)
+		local intersections = {};	
+		
+		local corners = getCorners(part.CFrame, part.Size);
+		local attach = {
+			[corners[1]] = {corners[3], corners[2], corners[5]};
+			[corners[4]] = {corners[3], corners[2], corners[8]};
+			[corners[6]] = {corners[5], corners[2], corners[8]};
+			[corners[7]] = {corners[3], corners[8], corners[5]};
+		};
+		for corner, set in next, attach do
+			for _, con in next, set do
+				local v = con - corner;
+				for i, plane in next, self.planes do
+					local p, t = planeIntersect(corner, v, plane.point, plane.normal)
+					if t >= 0 and t <= 1 then
+						local pass = true;
+						for i2, plane2 in next, self.planes do
+							if i2 ~= i then
+								local relative = p - plane2.point;
+								if dot(relative, plane2.normal) >= 0 then
+									pass = false;
+								end;
+							end;
+						end;
+						if pass then insert(intersections, p); end;
+					end;
+				end;
+			end;
+		end;
+		
+		local planes = {};
+		for _, enum in next, enumItems do
+			local lnormal = fromNormal(enum);
+			local wnormal = vectorToWorldSpace(part.CFrame, lnormal);
+			local distance = (lnormal * part.Size/2).magnitude;
+			local point = part.CFrame.p + wnormal * distance;
+			insert(planes, {
+				normal = wnormal;
+				point = point;
+			});
+		end;
+		local corners = self.corners;
+		local attach = {
+			[corners[1]] = {corners[3], corners[2], corners[5]};
+			[corners[4]] = {corners[3], corners[2], corners[8]};
+			[corners[6]] = {corners[5], corners[2], corners[8]};
+			[corners[7]] = {corners[3], corners[8], corners[5]};
+		};
+		for corner, set in next, attach do
+			for _, con in next, set do
+				local v = con - corner;
+				for i, plane in next, planes do
+					local p, t = planeIntersect(corner, v, plane.point, plane.normal)
+					if t >= 0 and t <= 1 then
+						local pass = true;
+						for i2, plane2 in next, planes do
+							if i2 ~= i then
+								local relative = p - plane2.point;
+								if dot(relative, plane2.normal) >= 0 then
+									pass = false;
+								end;
+							end;
+						end;
+						if pass then insert(intersections, p); end;
+					end;
+				end;
+			end;
+		end;
+		
+		return intersections;
+	end;
+
+	function region:cast(ignore, maxParts)
+		local maxParts = maxParts or 20
+
+		local rmin, rmax = {}, {}
+		local copy = shallowcopy(self.corners)
+		for _, enum in next, {Enum.NormalId.Right, Enum.NormalId.Top, Enum.NormalId.Back} do
+			local lnormal = fromNormal(enum)
+			tsort(copy, function(a, b) return dot(a, lnormal) > dot(b, lnormal) end)
+			insert(rmin, copy[#copy])
+			insert(rmax, copy[1])
+		end
+		rmin, rmax = vector3(rmin[1].x, rmin[2].y, rmin[3].z), vector3(rmax[1].x, rmax[2].y, rmax[3].z)
+		
+		local realRegion3 = origRegion3(rmin, rmax)
+		local parts = type(ignore) == "table" and findPartsInRegion3WithIgnoreList(workspace, realRegion3, ignore, maxParts) or findPartsInRegion3(workspace, realRegion3, ignore, maxParts)
+		
+		local inRegion = {}
+		for _, part in next, parts do
+			if self:castPart(part) then
+				insert(inRegion, part)
+			end
+		end
+		
+		return inRegion
+	end
+end
+
+local touchMod = {} do
+	local touchEventParts = {}
+
+	game:GetService("RunService").Stepped:connect(function()
+		for i = 1, #touchEventParts do
+			local data = touchEventParts[i]
+			local parts = data[1]
+			local func = data[2]
+			local runWhilstTouching = data[3]
+			local ignoreParts = data[4]
+			local initialize = data[5]
+			local ignore = {}
+			if initialize then
+				data[5] = false
+			end
+			local stillTouching = {}
+			for j = 1, #parts do
+				ignore[#ignore+1] = parts[j]
+			end
+			for j = 1, #parts do
+				local part = parts[j]
+				local nowRegion = region.fromPart(part)
+				local nowParts = nowRegion:cast(ignore, math.huge)
+				if runWhilstTouching then
+					for o = 1, #nowParts do
+						local touchPart = nowParts[o]
+						if not initialize then func(touchPart, part, nowRegion:intersectionPoints(touchPart)) end
+						ignore[#ignore+1] = touchPart
+					end
+				else
+					for o = 1, #nowParts do
+						local touchPart = nowParts[o]
+						stillTouching[touchPart] = true
+						if not ignoreParts[touchPart] then
+							ignoreParts[touchPart] = true
+							if not initialize then func(touchPart, part, nowRegion:intersectionPoints(touchPart)) end
+						end
+						ignore[#ignore+1] = touchPart
+					end
+				end
+			end
+			if not runWhilstTouching then
+				for oldPart in next, ignoreParts do
+					if not stillTouching[oldPart] then
+						ignoreParts[oldPart] = nil
+					end
+				end
+			end
+		end
+	end)
+
+	function touchMod:getTouching(obj)
+		local connected = {}
+		local parts = {}
+		local ignore = {}
+		if obj:IsA("BasePart") then
+			parts[1] = obj
+		else
+			do
+				local children = obj:GetChildren()
+				local n = 0
+				while n < #children do
+					n = n+1
+					local obj = children[n]
+					local descendants = obj:GetChildren()
+					for i = 1, #descendants do
+						children[#children+1] = descendants[i]
+					end
+					if obj:IsA("BasePart") then
+						parts[#parts+1] = obj
+					end
+				end
+			end
+		end
+		for i = 1, #parts do
+			ignore[#ignore+1] = parts[i]
+		end
+		for i = 1, #parts do
+			local part = parts[i]
+			local nowRegion = region.fromPart(parts[i])
+			local nowParts = nowRegion:cast(ignore, math.huge)
+			for j = 1, #nowParts do
+				local touchPart = nowParts[j]
+				connected[#connected+1] = {touching = touchPart, part = part, intersections = nowRegion:intersectionPoints(touchPart)}
+				ignore[#ignore+1] = touchPart
+			end
+		end
+		return connected
+	end
+
+	function touchMod:connect(obj, func, runWhilstTouching) --Add something for model touched so it can dteect all parts touching
+		local stored = {}
+		if obj:IsA("BasePart") then
+			stored[1] = obj
+		else
+			do
+				local children = obj:GetChildren()
+				local n = 0
+				while n < #children do
+					n = n+1
+					local obj = children[n]
+					local descendants = obj:GetChildren()
+					for i = 1, #descendants do
+						children[#children+1] = descendants[i]
+					end
+					if obj:IsA("BasePart") then
+						stored[#stored+1] = obj
+					end
+				end
+			end
+			obj.DescendantAdded:connect(function(new)
+				if not new:IsA("BasePart") then return end
+				stored[#stored+1] = new
+			end)
+			obj.DescendantRemoving:connect(function(new)
+				if not new:IsA("BasePart") then return end
+				local numItems = #stored
+				local n = 1
+				while n <= numItems do
+					if stored[n] == new then
+						stored[n] = stored[numItems]
+						stored[numItems] = nil
+						break --Only one should exist
+					else
+						n = n + 1
+					end
+				end
+			end)
+		end
+		local nowData = {stored, func, runWhilstTouching, {}, true}
+		local exists = false
+		if obj:IsDescendantOf(workspace) then
+			exists = true
+			touchEventParts[#touchEventParts+1] = nowData
+		end
+		obj.Changed:connect(function(p)
+			if p ~= "Parent" then return end
+			local shouldExist = obj:IsDescendantOf(workspace)
+			if shouldExist and not exists then
+				exists = true
+				touchEventParts[#touchEventParts+1] = nowData
+			elseif not shouldExist and exists then
+				exists = false
+				local numItems = #touchEventParts
+				local n = 1
+				while n <= numItems do
+					if touchEventParts[n] == nowData then
+						touchEventParts[n] = touchEventParts[numItems]
+						touchEventParts[numItems] = nil
+						numItems = numItems - 1
+					else
+						n = n + 1
+					end
+				end
+				nowData[4] = {}
+				nowData[5] = true
+			end
+		end)
+	end
+end
+
+return touchMod;
+
+--[[
+--Example usage--
+
+local RunService = game:GetService("RunService")
+
+--Example 1 (Touched event connected to Part):
+
+do
+	local rootPart = Instance.new("Part")
+	rootPart.Name = "rootPart"
+	rootPart.Size = Vector3.new(4, 4, 4)
+	rootPart.CFrame = CFrame.new(0, 4, -16)
+	rootPart.Anchored = true
+	rootPart.CanCollide = false
+	rootPart.TopSurface = "Smooth"
+	rootPart.BottomSurface = "Smooth"
+	rootPart.Parent = workspace
+
+	local movePart = rootPart:Clone()
+	movePart.Name = "movePart"
+	movePart.Size = Vector3.new(3, 3, 3)
+	movePart.CFrame = CFrame.new(-12, 4, -16)
+	movePart.BrickColor = BrickColor.new("Bright red")
+	movePart.Anchored = true
+	movePart.CanCollide = false
+	movePart.Parent = workspace
+
+	touchMod:connect(rootPart, function(obj, this, intersections)
+		local interStr = ""
+		for i = 1, #intersections do
+			if #interStr > 0 then interStr = interStr .. " & " end
+			interStr = interStr .. tostring(intersections[i])
+		end
+		print(tick(), obj.Name, "touched", this.Name, "at", interStr)
+	end, false)
+
+	for i = -12, 8, .2 do
+		movePart.CFrame = movePart.CFrame * CFrame.new(.2, 0, 0)
+		RunService.Heartbeat:wait()
+	end
+
+	for i = 8, -12, -.2 do
+		movePart.CFrame = movePart.CFrame * CFrame.new(-.2, 0, 0)
+		RunService.Heartbeat:wait()
+	end
+
+	rootPart:Destroy()
+	movePart:Destroy()
+end
+
+--Example 2 (Touched event connected to Model):
+
+do
+	local model = Instance.new("Model", workspace)
+
+	local rootPart = Instance.new("Part")
+	rootPart.Name = "rootPart"
+	rootPart.Size = Vector3.new(4, 4, 4)
+	rootPart.CFrame = CFrame.new(0, 4, -16)
+	rootPart.Anchored = true
+	rootPart.CanCollide = false
+	rootPart.TopSurface = "Smooth"
+	rootPart.BottomSurface = "Smooth"
+	rootPart.Parent = model
+
+	local movePart = rootPart:Clone()
+	movePart.Name = "movePart"
+	movePart.Size = Vector3.new(3, 3, 3)
+	movePart.CFrame = CFrame.new(-12, 4, -16)
+	movePart.BrickColor = BrickColor.new("Bright red")
+	movePart.Anchored = true
+	movePart.CanCollide = false
+	movePart.Parent = workspace
+
+	local rootPart2 = rootPart:Clone()
+	rootPart2.Name = "rootPart2"
+	rootPart2.CFrame = rootPart.CFrame * CFrame.new(1, 0, 0)
+	rootPart2.BrickColor = BrickColor.new("Bright blue")
+	rootPart2.Parent = model
+
+	touchMod:connect(model, function(obj, modelPartTouched, intersections)
+		local interStr = ""
+		for i = 1, #intersections do
+			if #interStr > 0 then interStr = interStr .. " & " end
+			interStr = interStr .. tostring(intersections[i])
+		end
+		print(tick(), obj.Name, "touched", modelPartTouched, "in", model.Name, "at", interStr)
+	end, false)
+
+	for i = -12, 8, .2 do
+		movePart.CFrame = movePart.CFrame * CFrame.new(.2, 0, 0)
+		RunService.Heartbeat:wait()
+	end
+
+	for i = 8, -12, -.2 do
+		movePart.CFrame = movePart.CFrame * CFrame.new(-.2, 0, 0)
+		RunService.Heartbeat:wait()
+	end
+
+	model:Destroy()
+	movePart:Destroy()
+end]]

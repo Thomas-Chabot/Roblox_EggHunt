@@ -1,0 +1,22 @@
+--[[
+	Counts how often a given name appears within the children of a parent.
+	
+	Takes two arguments:
+	  parent  PVInstance  The parent to check into (will only check direct children)
+	  name    string      The name to look for.
+	
+	Returns the number of occurences of the given name within the parent
+	  (an integer value)
+--]]
+
+function count (parent, name)
+	local counter = 0;
+	for _,child in pairs (parent:GetChildren ()) do
+		if (child.Name == name) then
+			counter = counter + 1;
+		end
+	end
+	return counter;
+end
+
+return count;

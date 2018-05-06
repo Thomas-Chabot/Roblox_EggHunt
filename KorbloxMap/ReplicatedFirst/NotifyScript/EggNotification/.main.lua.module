@@ -1,0 +1,40 @@
+local EggNotification = { };
+local EN              = { };
+
+local replStorage = game:GetService("ReplicatedStorage");
+local modules     = replStorage:WaitForChild ("Modules");
+
+local Show3D      = require (modules:WaitForChild ("Show3D"));
+
+local animLength = 3;
+
+function EN.new (egg)
+	return setmetatable ({
+		_egg    = egg,
+		_show3d = Show3D.new (egg)
+	}, EggNotification);
+end
+
+-- ** Public Methods ** --
+function EggNotification:notify ()
+	self:_runEffect ();
+	self:_setTextVisible ();
+end
+
+-- ** Private Methods ** --
+function EggNotification:_runEffect ()
+	self._show3d:show ();
+	self._show3d:wait ();
+	
+	wait ()
+	
+	self._show3d:remove ();
+	self._show3d:wait ();
+end
+
+function EggNotification:_setTextVisible ()
+	print ("Text for notifications not added yet");
+end
+
+EggNotification.__index = EggNotification;
+return EN;

@@ -1,0 +1,62 @@
+--[[
+	Controls interactions with the Door.
+	
+	Documentation pending
+--]]
+
+local Door = { };
+local D    = { };
+
+local GuiController = require (script.GuiController);
+
+local iceBlockDoor = workspace.IceBlockDoor;
+local positions    = workspace.IceBlockPositions;
+local player       = game.Players.LocalPlayer;
+
+-- Constructor
+function D.new (maxDist)
+	local door = setmetatable ({
+		_maxDist = D,
+		_gui     = GuiController.new (iceBlockDoor, maxDist),
+		
+		Interact = nil
+	}, Door);
+	
+	door:_init ();
+	return door;
+end
+
+-- ** Public Methods ** --
+function Door:remove ()
+	if (not iceBlockDoor) then return end
+	iceBlockDoor:Destroy();
+end
+
+function Door:damage ()
+	-- Show the damage animation here
+end
+
+function Door:get ()
+	return iceBlockDoor;
+end
+
+-- Quest - starting/ending listening for player within range
+function Door:startInteractions ()
+	self._gui:startChecking ();
+end
+
+function Door:endInteractions ()
+	self._gui:stopChecking ();
+end
+
+-- ** Private Methods ** --
+-- initialization
+function Door:_init ()
+	self:_addEventHandling ();
+end
+function Door:_addEventHandling ()
+	self.Interact = self._gui.Interact;
+end
+
+Door.__index = Door;
+return D;

@@ -1,0 +1,17 @@
+local DEF_DUR = 2;
+
+function textAnim (value, label, duration)
+	assert (value, " No text value specified");
+	assert (label, " Text Label must be provided");
+	if (not duration) then duration = DEF_DUR; end
+	
+	local waitTime = duration / #value;
+	
+	for i = 1,#value do
+	--	print (value:sub (1, i));		
+		label.Text = value:sub (1, i);
+		wait (waitTime);
+	end
+end
+
+return textAnim;

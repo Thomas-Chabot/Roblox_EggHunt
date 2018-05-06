@@ -1,0 +1,93 @@
+local EggDropper = { };
+local ED         = { };
+
+local servStorage = game:GetService("ServerStorage");
+local modules     = servStorage:FindFirstChild("Modules");
+
+local getGameSize = require (modules.GameSize);
+local Positioning = require (modules.Positioning);
+
+local EGGS_PARENT = workspace.Eggs;
+
+function ED.new (egg)
+	assert (egg, " The egg is a required argument");
+	
+	local dropper = setmetatable ({
+		_egg   = egg,
+		_stats = egg:FindFirstChild ("DropStats")
+	}, EggDropper);
+	
+	dropper:_init ();
+	return dropper;
+end
+
+-- ** Public Methods ** --
+function EggDropper:drop ()
+	self:_drop ();
+end
+
+
+-- ** Private Methods ** --
+-- Initialization
+function EggDropper:_init ()
+	self:_initEgg ();
+	self:_initDropping ();
+end
+function EggDropper:_initEgg ()
+	-- Checks the requirement that if the egg is a model, it must have
+	--  a PrimaryPart specified
+	if (self._egg:IsA("Model")) then
+		assert (self._egg.PrimaryPart, "Egg models must have a PrimaryPart specified.");
+	end
+end
+function EggDropper:_initDropping ()
+	local interval = self._stats and self._stats:FindFirstChild ("Interval");
+	assert (interval, " Egg.DropStats.Interval must exist.");
+	
+	interval = interval.Value;
+	spawn (function ()
+		while wait(interval) do
+--			print ("Spawning");
+			self:_drop ();
+		end
+	end)
+end
+
+-- Dropping
+function EggDropper:_drop ()
+	local egg = self:_makeEgg ();
+	
+	self:_randomizePosition (egg);
+	self:_spawn (egg);
+end
+
+-- Clone the egg
+function EggDropper:_makeEgg ()
+	return self._egg:Clone ();
+end
+
+-- Position Randomization
+function EggDropper:_randomizePosition (egg)
+	local pos = self:_getRandPos ()
+	
+	if (egg:IsA("Model")) then
+		egg = egg.PrimaryPart;
+	end
+	
+	egg.CFrame = CFrame.new (pos);
+end
+function EggDropper:_getRandPos ()
+	local range = getGameSize ();
+	local pos   = Positioning.random (range.min, range.max);
+	
+	return pos;
+end
+
+-- Spawning
+function EggDropper:_spawn (egg)
+	egg.Parent = EGGS_PARENT;
+end
+
+
+EggDropper.__index = EggDropper;
+return ED;

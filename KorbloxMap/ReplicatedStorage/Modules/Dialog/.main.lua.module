@@ -1,0 +1,242 @@
+--[[
+	Main Dialog Module - controls displaying a Dialog to the user,
+	 with optional quest buttons (Accept & Ok).
+
+ 	Constructor takes two arguments:
+		dialogText  Array [String]  An array of text to display in the dialog.
+		                             Will be displayed one-by-one, allowing next/prev
+		options     Dictionary      Various options [OPTIONAL ARGUMENT]:
+		  characterSpeed  float  Some delay for the text (displayed character-by-character,
+		                                                   typing animation).
+		                           Defaults to 0.03.
+		  confirmation    bool   Whether or not to show the confirm/decline buttons.
+		                           Defaults to false.
+		  autoSteps       bool   Whether or not to automate moving to the next text.
+		                           Defaults to true. If false, will have to call
+		                           next() and prev() to move around. 
+	
+	Methods:
+		next ()
+		  Moves the dialog to the next text to display.
+		prev ()
+		  Moves the dialog back to the previous text.
+		remove ()
+		  Removes the GUI and all elements.
+		  Note this is called automatically on Confirm/Decline events,
+		    but will have to be done manually if not a Confirmation Dialog.
+		isLast () : boolean
+		  Checks if the final text for the dialog has been displayed.
+		 
+	Events:
+	  Next()
+	    Fired when the next button has been pressed
+	  Prev()
+	    Fired when the previous button has been pressed
+	  Confirm()
+	    Fired when the confirm button has been pressed
+	  Decline()
+	    Fired when the decline button has been pressed
+--]]
+
+local Dialog = { };
+local D      = { };
+
+local replStorage = game:GetService ("ReplicatedStorage");
+local modules     = replStorage:WaitForChild ("Modules");
+
+local Animation = require (script.Animation);
+local Button    = require (script.Button);
+
+local dialogGui = script.DialogGui:Clone ();
+
+local buttonNames = {"_nextBtn", "_prevBtn", "_okBtn", "_decBtn"};
+
+local DEF_CHAR_SPEED = 0.03;
+
+function D.new (dialogText, options)
+	if (not options) then options = { }; end
+	if (options.autoSteps ~= false) then options.autoSteps = true; end
+	
+	local dialog = setmetatable({
+		_text  = dialogText,
+		_quest = options.confirmation,
+		_steps = options.autoSteps,
+		
+		_current   = 1,
+		_isWriting = false,
+		
+		_charTimeout = options.characterSpeed or DEF_CHAR_SPEED,
+		
+		_dialogGui = dialogGui:Clone (),
+		_bgFrame   = nil,
+		_nextBtn   = nil,
+		_prevBtn   = nil,
+		_okBtn     = nil,
+		_decBtn    = nil,
+		_textLbl   = nil,
+		
+		Next    = Instance.new("BindableEvent"),
+		Prev    = Instance.new("BindableEvent"),
+		Confirm = Instance.new("BindableEvent"),
+		Decline = Instance.new("BindableEvent"),
+		
+		Removed = false
+	}, Dialog);
+	
+	dialog:_init ();
+	return dialog;
+end
+
+-- ** Public Methods ** --
+function Dialog:next ()
+	if (not self:_incCounter (1)) then return false end
+	self:_update ();
+end
+function Dialog:prev ()
+	if (not self:_incCounter (-1)) then return false end
+	self:_update ();
+end
+function Dialog:remove ()
+	self.Removed = true;
+	self:_remove ();
+end
+function Dialog:isLast ()
+	return self._current == #self._text;
+end
+
+-- ** Private Methods ** --
+-- Initialization
+function Dialog:_init ()
+	self:_initGui ();
+	
+	if (self._steps) then
+		self:_initStepping ();
+	end
+	
+	--print ("Initialized");
+	
+	self:_update ();
+end
+
+-- Gui Initialization
+function Dialog:_initGui ()
+	self:_initGuiVariables();	
+	self:_initEvents ();
+	self:_initParent ();
+end
+-- Gui elements
+function Dialog:_initGuiVariables ()
+	self._bgFrame = self._dialogGui.BackgroundFrame;
+	self._textLbl = self._bgFrame.TextLbl;
+	
+	self:_initButtons ();
+end
+function Dialog:_initButtons ()
+	self._nextBtn = Button.new (self._bgFrame.NextBtn, self._nextCond, self);
+	self._prevBtn = Button.new (self._bgFrame.PrevBtn, self._prevCond, self);
+	self._okBtn   = Button.new (self._bgFrame.ConfirmBtn, self._questCond, self);
+	self._decBtn  = Button.new (self._bgFrame.DeclineBtn, self._questCond, self);
+end
+-- Events
+function Dialog:_initEvents ()
+	self.Next = self._nextBtn.Click;
+	self.Prev = self._prevBtn.Click;
+	self.Confirm = self._okBtn.Click;
+	self.Decline = self._decBtn.Click;
+	
+	self:_initReactions ();
+end
+function Dialog:_initReactions ()
+	self.Confirm.Event:connect (function ()
+		self:remove ();
+	end)
+	self.Decline.Event:connect (function ()
+		self:remove ();
+	end)
+end
+-- Parent
+function Dialog:_initParent ()
+	local plyr = game.Players.LocalPlayer
+	local pGui = plyr and plyr:WaitForChild("PlayerGui")
+	self._dialogGui.Parent = pGui;
+end
+
+-- Stepping
+function Dialog:_initStepping ()
+	self.Next.Event:connect (function ()
+		self:next ();
+	end)
+	self.Prev.Event:connect (function ()
+		self:prev ();
+	end)
+end
+
+-- Conditions
+function Dialog:_nextCond ()
+	if (self:_writing()) then return false end
+	return self._steps and self._current < #self._text;
+end
+function Dialog:_prevCond ()
+	if (self:_writing()) then return false end
+	return self._steps and self._current > 1;
+end
+function Dialog:_questCond ()
+	if (self:_writing()) then return false end
+	return self._quest and self:isLast ();
+end
+
+-- Counter
+function Dialog:_incCounter (increment)
+	local targIndex = self._current + increment;
+	if (not self:_inRange (targIndex)) then return false end
+	
+	self._current = targIndex;
+	return true;
+end
+function Dialog:_inRange (value)
+	return value > 0 and value <= #self._text;
+end
+
+-- Updating
+function Dialog:_update ()
+	self:_updateText ();
+end
+function Dialog:_updateText ()
+	spawn (function ()
+		local textValue = self._text [self._current];
+		assert (textValue, "The text could not be found for current = " .. self._current);
+		
+		local duration = #textValue * self._charTimeout;
+		self:_animate (textValue, duration);
+	end)
+end
+function Dialog:_updateButtons ()
+	for _,btn in pairs (buttonNames) do
+		if (self[btn]) then
+			self[btn]:update ();
+		end
+	end
+end
+
+-- Animating
+function Dialog:_animate (text, duration)
+	self:_anim (true);
+	Animation.Run (Animation.Types.Text, text, self._textLbl, duration);
+	self:_anim (false);
+end
+function Dialog:_anim (isWriting)
+	self:_writing (isWriting);
+	self:_updateButtons ();
+end
+function Dialog:_writing (arg)
+	if (arg == nil) then return self._isWriting; end
+	self._isWriting = arg;
+end
+
+-- Removal
+function Dialog:_remove ()
+	self._dialogGui:Destroy();
+end
+
+Dialog.__index = Dialog;
+return D;

@@ -1,0 +1,18 @@
+local Positioning = { };
+
+function Positioning.random (min, max)
+	return Vector3.new (
+		math.random (min.X, max.X),
+		math.random (min.Y, max.Y),
+		math.random (min.Z, max.Z)
+	);
+end
+
+function Positioning.randomFromPart (part)
+	return Positioning.random (
+		part.Position - part.Size/2,
+		part.Position + part.Size/2
+	);
+end
+
+return Positioning;

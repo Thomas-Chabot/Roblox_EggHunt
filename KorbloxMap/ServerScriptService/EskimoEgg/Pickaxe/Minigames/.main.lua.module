@@ -1,0 +1,33 @@
+local Minigames = { };
+local games = { };
+
+local servStorage = game:GetService("ServerStorage");
+local modules     = servStorage:FindFirstChild("Modules");
+
+local MinigameMod = require (modules.Eskimo.PickaxeGame);
+local Events      = require (script.EventBindings);
+
+local ICE_BLOCK  = game.Workspace.IceBlockPositions;
+local NUM_ROUNDS = 10;
+
+Minigames.GameWin = Events.GameWin;
+Minigames.GameOver = Events.GameOver;
+Minigames.PositionChanged = Events.PositionChanged;
+
+-- initialize a player's game
+function Minigames.init (player)
+	if (not games [player]) then
+		games [player] = MinigameMod.new (ICE_BLOCK,  NUM_ROUNDS);
+		print (player, games [player])
+		Events.bind (games [player], player);
+	end
+	
+	games [player]:start ();
+end
+
+-- get a player's game
+function Minigames.get (player)
+	return games [player];
+end
+
+return Minigames;

@@ -1,0 +1,15 @@
+-- Returns an instance of the Spawner object, for the Pickaxe
+
+local replStorage = game:GetService ("ReplicatedStorage");
+
+local tools       = replStorage:WaitForChild ("Tools");
+local pickaxe     = tools:WaitForChild ("PickaxeGiver");
+
+local modules     = replStorage:WaitForChild ("Modules");
+local Spawner     = require (modules:WaitForChild ("Spawner"));
+
+local model = workspace:WaitForChild ("PickaxeSpawner");
+
+local MAX_PICKS = 1;
+
+return Spawner.new (pickaxe, model, MAX_PICKS);

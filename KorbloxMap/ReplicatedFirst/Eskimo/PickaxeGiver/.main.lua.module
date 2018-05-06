@@ -1,0 +1,45 @@
+local PickaxeGiver = { };
+local PG           = { };
+
+local replStorage = game:GetService ("ReplicatedStorage");
+local modules     = replStorage:FindFirstChild ("Modules");
+local events      = replStorage:FindFirstChild ("RemoteEvents");
+local tools       = replStorage:FindFirstChild("Tools");
+
+local Giver       = require (modules:FindFirstChild ("Giver"));
+local count       = require (modules:FindFirstChild ("Count"));
+
+local Pickaxe     = tools:FindFirstChild("Pickaxe");
+
+function PG.new ()
+	return setmetatable ({
+		_part  = nil,
+		_giver = nil,
+		
+		PickedUp = Instance.new("BindableEvent")
+	}, PickaxeGiver);
+end
+
+function PickaxeGiver:start ()
+	self._part  = workspace.PickaxeSpawner.PickaxeGiver;
+	self._giver = self:_createGiverObj ();
+	self._giver.Activated.Event:connect (function ()
+		self.PickedUp:Fire ();
+	end)
+end
+
+function PickaxeGiver:_createGiverObj ()
+	return Giver.new (self._part, Pickaxe, {
+		canGive = function (hit, player)
+			if (not player) then return false end;
+			
+			local backpack  = player:FindFirstChild ("Backpack");
+			local character = player.Character;
+			
+			return count (character, Pickaxe.Name) + count (backpack, Pickaxe.Name) < 1;
+		end
+	});
+end
+
+PickaxeGiver.__index = PickaxeGiver;
+return PG;

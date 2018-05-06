@@ -1,0 +1,200 @@
+--[[
+	A simple module for interacting with the Camera to apply a zoom effect.
+	
+	NOTE, this must be run from a LocalScript. This will fire errors otherwise.
+	
+	CONSTRUCTOR:
+		The constructor takes one argument:
+		  duration  number  Any number value. This is how long the camera effects will last.
+		                    Defaults to 1.
+		
+	Has two methods:
+		zoomIn (targetPos : CFrame, percentage : float)
+		  Purpose: Zooms the camera towards the targetPosition with the given percentage.
+		  Arguments:
+		    targetPos   CFrame   The target position to zoom towards
+		    percentage  float    A percentage to zoom in. Must be between 0 and 1.
+		zoomOut ()
+		  Purpose: Resets the camera to its original position before the zoom.
+--]]
+
+local Camera = { };
+local C      = { };
+
+local Interpolate = { };
+
+local DEFAULT_DURATION = 1;
+local DEFAULT_ZOOM     = 0.2;
+
+local CamObj = nil;
+
+function C.new (duration)
+	-- NOTE: Because we need the eggs to share the one camera object,
+	--       Will cache this and return it if another has created it.
+	if (CamObj) then return CamObj; end
+	
+	-- ASSUMING the LocalPlayer will exist. If not, this will incorrectly fire errors
+	assert (game.Players.LocalPlayer, "This module must be run locally.");
+	if (not duration) then duration = DEFAULT_DURATION end;
+	
+	local camera = setmetatable ({
+		_player   = game.Players.LocalPlayer,
+		_duration = duration,
+		
+		_cam = Interpolate.new(),
+		
+		_isZoomedIn  = false,
+		_startingPos = nil,
+		_startingFoc = nil,
+		
+		_lastTm      = 0
+	}, Camera);
+	
+	CamObj = camera;
+	return camera;
+end
+
+-- ** Public Methods ** --
+function Camera:zoomIn (targetPos, percentage)
+	assert (targetPos, " Target is a required parameter");
+	if (not percentage) then percentage = DEFAULT_ZOOM end
+	
+	self:_reset ();
+	
+	-- Cache the starting position - simplifies going back to this later
+	local pos = self:_getPosition ();
+	self:_storePosition ();
+	
+	-- Set the zoomed in position - note we want only the positions here, hence the p
+	local newPos = self:_calculateZoom (pos.p, targetPos.p, percentage);
+	local newCF  = CFrame.new (newPos, pos.lookVector);
+	
+	self:_setPosition (newCF, targetPos);
+	self:_updateTimestamp ();
+	
+	self._isZoomedIn = true;
+end
+
+function Camera:zoomOut (duration)
+	-- Because we have the position cached, can just go back to that
+	self._isZoomedIn = false;
+	self:_setPosition (self:_getSavedPos (), self:_getSavedFocus ());
+end
+
+-- Wait for the animation to complete
+function Camera:wait ()
+	local lastOp   = self._lastTm;
+	local timeDiff = tick() - lastOp;
+	local timeLeft = self._duration - timeDiff;
+	
+	if (timeLeft < 0) then return end
+	wait (timeLeft); 
+end
+
+-- ** Private Helpers ** --
+
+-- Reset the camera's position
+function Camera:_reset ()
+	if (self:_getSavedPos()) then
+		self._isZoomedIn = false;
+		self:_forcePosition (self:_getSavedPos (), self:_getSavedFocus());
+	end
+end
+
+--[[
+	Calculate the resultant position for zooming the camera in.
+	Parameters:
+	  origPos    - Vector3 - The position of the camera's current position
+	  targetPos  - Vector3 - The target position to zoom towards
+   	  zoomPercnt - Float   - The percentage of zoom to apply. Should be between 0 and 1
+	Return Value: Vector3 - The result position to place the camera to apply the zoom.
+]]
+function Camera:_calculateZoom (origPos, targetPos, zoomPercentage)
+	-- Formula to calculate where the position should be to be zoomed in..
+	-- Logic here is to take the difference, multiply it by the zoom percentage,
+	--   add that result to the origin position to get the result.
+	
+	-- Eg. If (0, 0, 0), target (15, 15, 15), percentage 0.2
+	-- difference is (15, 15, 15), * 0.2 is (3, 3, 3)
+	-- Which means final result is (3, 3, 3)
+	return ((targetPos - origPos) * zoomPercentage) + origPos;
+end
+
+-- Position caching
+function Camera:_storePosition ()
+	local pos = self:_getPosition ();
+	local foc = self:_getFocus ();
+	
+	self._startingPos = pos;
+	self._startingFoc = foc;
+end
+function Camera:_getSavedPos ()
+	return self._startingPos;
+end
+function Camera:_getSavedFocus ()
+	return self._startingFoc;
+end
+
+-- Timestamp - when was the last set operation?
+function Camera:_updateTimestamp ()
+	self._lastTm = tick();
+end
+
+-- Main manipulators - set & get the camera position
+function Camera:_setPosition (position, target)
+	assert (position, " Cannot set position without provided position");
+	assert (target, " Target focus is required");
+	
+	self._cam:interpolate (position, target, self._duration);
+end
+function Camera:_forcePosition (position, target)
+	self._cam:setPosition (position, target);
+end
+function Camera:_getPosition ()
+	return self._cam:getPosition ();
+end
+function Camera:_getFocus ()
+	return self._cam:getFocus ();
+end
+
+Camera.__index = Camera;
+
+
+-- BELOW HERE - The Interpolation object ...
+-- ------------------------------------------
+local Interpolation = { };
+
+function Interpolate.new ()
+	return setmetatable({
+		
+	}, Interpolation);
+end
+
+-- Setter
+function Interpolation:interpolate (position, focus, duration)
+	local cam = self:_getCamera ();
+	cam:Interpolate (position, focus, duration);
+end
+function Interpolation:setPosition (cf, focus)
+	local cam = self:_getCamera ();
+	cam.CFrame = cf;
+end
+
+-- Getters
+function Interpolation:getPosition ()
+	local cam = self:_getCamera ();
+	return cam.CFrame;
+end
+function Interpolation:getFocus ()
+	local cam = self:_getCamera();
+	return cam.Focus;
+end
+
+function Interpolation:_getCamera ()
+	return workspace.CurrentCamera;
+end
+
+Interpolation.__index = Interpolation;
+-- END OF INTERPOLATION MODULE
+
+return C;

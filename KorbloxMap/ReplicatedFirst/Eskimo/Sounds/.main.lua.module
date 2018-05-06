@@ -1,0 +1,15 @@
+local Sounds = { };
+
+local SoundTypes = {
+	MinigameLost = script.LostSound,
+	Damaged      = script.DoorDamaged,
+	Won          = script.GameWon
+}
+
+function Sounds:Play (soundType)
+	if (not soundType) then return end
+	soundType:Play ();
+end
+
+Sounds.Types = SoundTypes;
+return Sounds;

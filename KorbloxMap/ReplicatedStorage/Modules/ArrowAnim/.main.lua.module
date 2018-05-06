@@ -1,0 +1,151 @@
+--[[
+	Simple animation for moving an arrow back and forth over given points.
+	
+	Constructor takes up to two arguments:
+	  direction  Vector3  The direction to point the arrow towards (eg. Z axis)
+	  distance   Vector3  How far to move the arrow in one direction, before reversing
+	
+	Then has two methods:
+	  start (position : Vector3)
+	    Purpose: Starts the animation. Will animate with the origin of the given point.
+	    Arguments:
+	      position  The origin point. This is where the animation will run from.
+	    Returns: None
+	
+	  stop ()
+	    Purpose: Stops the animation.
+--]]
+
+local ArrowAnim = { };
+local AA        = { };
+
+local arrow = script.Arrow;
+
+-- ** Constructor ** --
+function AA.new (direction, distance)
+	assert (direction, "Direction is a required argument");
+	if (not distance) then distance = 5; end
+	
+	local arrowAnim = setmetatable ({
+		_direction = direction,
+		_distance  = distance,
+		
+		_arrow = arrow:Clone(),
+		_targ  = nil
+	}, ArrowAnim);
+	
+	arrowAnim:_init ();
+	return arrowAnim;
+end
+
+-- ** Public Methods ** --
+function ArrowAnim:start (position)
+	self:_showArrow ();
+	self:_start (position);
+end
+function ArrowAnim:stop ()
+	self:_hideArrow ();
+	self:_stop ();
+end
+
+-- ** Private Methods ** --
+-- Initialization
+function ArrowAnim:_init ()
+	self:_initParts ();
+	self:_initVariables ();
+	self:_initEvents ();
+end
+function ArrowAnim:_initParts ()
+	self:_initTarget ();
+end
+function ArrowAnim:_initTarget ()
+	local part = Instance.new ("Part");
+	part.Transparency = 1;
+	part.Size = Vector3.new (1, 1, 1);
+	part.CanCollide = false;
+	part.Anchored = true;
+	self._targ = part;
+end
+function ArrowAnim:_initVariables ()
+	self._rocket = self._arrow.RocketPropulsion;
+	self._rocket.Target = self._targ;
+end
+function ArrowAnim:_initEvents ()
+	-- When the Body Position reaches its target, we want to reverse it
+	-- To animate moving back and forth
+	self._rocket.ReachedTarget:connect (function ()
+		self:_reset ();
+		self:_reverse ();
+	end)
+end
+
+-- Reset the arrow - this is hacky as f
+function ArrowAnim:_reset ()
+	self:_resetArrow ();
+	self._targ:Destroy ();
+	
+	self:_init ();
+	self:_showArrow ();
+end
+function ArrowAnim:_resetArrow ()
+	self:_hideArrow ();
+	
+	local arrow = self._arrow:Clone ();
+	self._arrow = arrow:Clone ();
+	arrow:Destroy ();
+end
+
+-- Start/stop the animation
+function ArrowAnim:_start (pos)
+	self:_reposition (pos)
+	self:_cycle (pos, pos + self._direction * self._distance);
+end
+function ArrowAnim:_stop ()
+	-- Nothing to be done here ... just handled by parenting the arrow to nil
+end
+
+-- The main arrow hide/show
+function ArrowAnim:_showArrow ()
+	self._arrow.Parent = workspace
+	self._targ.Parent = workspace
+end
+function ArrowAnim:_hideArrow ()
+	self._arrow.Parent = nil
+	self._targ.Parent = nil
+end
+
+function ArrowAnim:_reposition (position)
+	self._arrow.Position = position;
+end
+
+-- Cycling / Moving
+function ArrowAnim:_reverse ()
+	self:_cycle (self._targPos, self._fromPos);
+end
+function ArrowAnim:_cycle (fromPos, targPos)
+	self._fromPos = fromPos;
+	self._targPos = targPos;
+	
+	self:_abort ();
+	self:_moveTo (targPos);
+end
+
+-- Main moving functions
+function ArrowAnim:_moveTo (position)
+	self:_setTarget (position);	
+	self:_fire ();
+end
+function ArrowAnim:_setTarget (position)
+	self._targ.Position = position;
+end
+
+function ArrowAnim:_abort ()
+	self._rocket:Abort ();
+end
+function ArrowAnim:_fire ()
+	self._rocket:Fire();
+end
+
+
+ArrowAnim.__index = ArrowAnim;
+return AA;

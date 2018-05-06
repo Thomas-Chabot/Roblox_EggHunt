@@ -1,0 +1,82 @@
+local replStorage = game:GetService ("ReplicatedStorage");
+local modules     = replStorage:WaitForChild ("Modules");
+local events      = replStorage:WaitForChild ("RemoteEvents");
+
+local eskimoEvts  = events.Eskimo;
+local questEvts   = eskimoEvts.Quest;
+local pickaxeEvts = eskimoEvts.Pickaxe;
+
+local request     = questEvts.Request;
+local accept      = questEvts.Accept;
+
+local spawnPick    = pickaxeEvts.Spawn;
+local pickEnd      = pickaxeEvts.End;
+local pickWon      = pickaxeEvts.Won;
+local pickStart    = pickaxeEvts.Start;
+local pickPickedUp = pickaxeEvts.PickedUp;
+
+local arrowMoved  = pickaxeEvts.ArrowMoved;
+
+local doorDamaged = pickaxeEvts.Damaged;
+
+local Quest   = require (script.Quest).new ();
+local Pickaxe = require (script.Pickaxe);
+local Arrow   = require (script.Arrow);
+local Door    = require (script.Door);
+local Giver   = require (script.PickaxeGiver).new ();
+local Sounds  = require (script.Sounds);
+
+-- Various constants
+local ARROW_DISTANCE = 10;
+local ARROW_DIRECTION = Vector3.new (-1, 0, 0);
+local MAX_DOOR_DIST   = 20;
+
+-- Creating the objects
+Arrow = Arrow.new (ARROW_DISTANCE, ARROW_DIRECTION);
+Door  = Door.new (MAX_DOOR_DIST);
+
+-- Event Handling
+Quest.Confirm.Event:connect (function ()
+	accept:FireServer ();
+end)
+request.OnClientEvent:connect (function ()
+	Quest:run ();
+end)
+
+spawnPick.OnClientEvent:connect (function ()
+	Pickaxe:spawn ();
+	Giver:start ();
+end)
+pickEnd.OnClientEvent:connect (function ()
+	Pickaxe:remove ();
+	Arrow:remove ();
+	
+	Sounds:Play (Sounds.Types.MinigameLost);
+end)
+pickWon.OnClientEvent:connect (function ()
+	Door:remove ();
+	Arrow:remove ();
+	
+	Sounds:Play (Sounds.Types.Won);
+end)
+
+--pickPickedUp.OnClientEvent:connect (function ()
+Giver.PickedUp.Event:connect (function ()
+	--pickPickedUp:FireServer ();
+	Door:startInteractions ();
+end)
+
+doorDamaged.OnClientEvent:connect (function ()
+	print ("The door has taken damage!");
+	Sounds:Play (Sounds.Types.Damaged);
+	Door:damage ();
+end)
+
+arrowMoved.OnClientEvent:connect (function (position)
+	Arrow:move (position)
+end)
+
+Door.Interact.Event:connect (function ()
+	pickStart:FireServer ();
+	Door:endInteractions ();
+end)

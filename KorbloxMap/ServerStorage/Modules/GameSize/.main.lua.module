@@ -1,0 +1,34 @@
+--[[
+	Not the best implementation, but it's one that will work ..
+
+	Returns a function which can be used to get the size of the game's base
+	 (i.e., all possible drop points for eggs that drop randomly).
+
+	Function takes no arguments;
+	Returns a dictionary of two values:
+		min - The minimum size (this is the lowest point)
+		max - The maximum size (the highest point)
+		
+	Note this is all based off the workspace.Snowfalls object,
+	  wherever Snow particles can be dropped, the egg may also be dropped.
+	
+	Note as well that if there are many snow particle droppers, then
+	  the getGameSize() return value may change - one will be selected
+	  at random.
+--]]
+
+local Array = require (659977306);
+local snowfallsObj = workspace.Snowfalls:GetChildren ();
+local snowfalls    = Array.new (snowfallsObj);
+
+function getGameSize ()
+	local fall = snowfalls:random ();
+	local sizeOffset = fall.Size / 2;
+	
+	return {
+		min = fall.Position - sizeOffset,
+		max = fall.Position + sizeOffset
+	};
+end
+
+return getGameSize;

@@ -1,0 +1,50 @@
+local Button = { };
+local B      = { };
+
+local DEF_COND = function() return true; end
+
+-- ** Constructor ** --
+function B.new (btn, condition, ...)
+	assert (btn, " Button is a required argument");
+	if (not condition) then condition = DEF_COND; end
+	
+	local button = setmetatable ({
+		_btn  = btn,
+		_cond = condition,
+		_args = {...},
+		
+		Click = Instance.new("BindableEvent")
+	}, Button);
+	
+	button:_init ();
+	return button;
+end
+
+-- ** Public Methods ** --
+function Button:update ()
+	self:_updateVisibility (self:_check ())
+end
+
+-- ** Private Methods ** --
+-- Initiailization
+function Button:_init ()
+	self:_initEvents ();
+end
+function Button:_initEvents ()
+	self._btn.MouseButton1Click:connect (function ()
+		self.Click:Fire ()
+	end)
+end
+
+-- Check the condition (should the button be shown?)
+function Button:_check ()
+	return self._cond (unpack (self._args));
+end
+
+-- Show/hide the button
+function Button:_updateVisibility (isVisible)
+	self._btn.Visible = isVisible;
+end
+
+Button.__index = Button;
+return B;

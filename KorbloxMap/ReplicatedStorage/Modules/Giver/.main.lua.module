@@ -1,0 +1,91 @@
+local Giver = { };
+local G     = { };
+
+local DEF_PARENT_FUNC = function(hit, player) return player:FindFirstChild("Backpack"); end
+ 
+function G.new (giver, tool, options)
+	local giver = setmetatable ({
+		_giver = giver,
+		_tool  = tool,
+		
+		_getParent = options.parentFunc or DEF_PARENT_FUNC,
+		_canGive   = options.canGive,
+		
+		Activated = Instance.new("BindableEvent")
+	}, Giver);
+	
+	giver:_init ();
+	return giver;
+end
+
+-- Initialization
+function Giver:_init ()
+	self:_initEvents ();
+end
+function Giver:_initEvents ()
+	local part = self:_getGiverParts ();
+	self:_connect (part);
+end
+function Giver:_connect (part)
+	part.Touched:connect (function (...)
+		self:_touched (...);
+	end)
+end
+
+function Giver:_getGiverParts ()
+	-- Is a part?
+	if (self._giver:IsA("BasePart")) then
+		return self._giver;
+	end
+	
+	-- Has a primary part?
+	if (self._giver.PrimaryPart) then
+		return self._giver.PrimaryPart;
+	end
+	
+	-- Just find the first part & return it
+	return self._giver:FindFirstChildWhichIsA ("BasePart");
+end
+
+-- The main function
+function Giver:_touched (hit)
+	local player = self:_getPlayer (hit);
+	
+	self:_give (hit, player);
+	self:_activated (hit, player);
+end
+
+-- The "give" functionality
+function Giver:_give (hit, player)
+	if (not self._tool) then return end
+	if (not self:_checkCanGive (hit, player)) then return end	
+	
+	local parent = self:_findParent (hit, player);
+	if (not parent) then return end
+	
+	self._tool:Clone ().Parent = parent;
+end
+
+-- Can give?
+function Giver:_checkCanGive (hit, player)
+	if (not self._canGive) then return true end;
+	return self._canGive (hit, player);
+end
+
+-- Getters
+function Giver:_getPlayer (hit)
+	local character = hit and hit.Parent;
+	return character and game.Players:GetPlayerFromCharacter(character);
+end
+function Giver:_findParent (hit, player)
+	return self._getParent (hit, player);
+end
+
+-- Activated event
+function Giver:_activated (...)
+	self.Activated:Fire (...);
+end
+
+
+Giver.__index = Giver;
+return G;

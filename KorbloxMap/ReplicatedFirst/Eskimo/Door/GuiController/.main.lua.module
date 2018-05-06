@@ -1,0 +1,75 @@
+local GuiController = { };
+local GC            = { };
+
+local replStorage = game:GetService ("ReplicatedStorage");
+local modules     = replStorage:WaitForChild ("Modules");
+local DoorGui     = require (modules.InteractGui);
+
+function GC.new (part, maxDistance)
+	local gc = setmetatable ({
+		_maxDist = maxDistance,
+		_gui     = DoorGui.new (),
+		
+		_mainPart = part,
+		
+		Interact = nil
+	}, GuiController);
+	
+	gc:_init ();
+	
+	return gc;
+end
+
+-- ** Public Methods ** --
+function GuiController:startChecking ()
+	self._active = true;
+end
+function GuiController:stopChecking ()
+	print ("Stop checking");
+	
+	self._active = false;
+	self._gui:hide ();
+end
+
+
+-- ** Private Methods ** --
+-- Distance checking
+function GuiController:_distance (point)
+	return game.Players.LocalPlayer:DistanceFromCharacter(point);
+end
+function GuiController:_withinRange ()
+	return self:_distance (self._mainPart.Position) < self._maxDist;
+end
+
+-- Main control function
+function GuiController:_step ()
+	if (not self._active) then return end
+	
+	if (self:_withinRange ()) then
+		self._gui:show ()
+	else
+		self._gui:hide ()
+	end
+end
+
+-- Initialization / Main setup
+function GuiController:_init ()
+	self:_initStepping ();
+	self:_addEventHandling ();
+end
+
+function GuiController:_initStepping ()
+	spawn (function ()
+		while wait(1) do
+			self:_step ();
+		end
+	end)
+end
+
+-- Event Redirection
+function GuiController:_addEventHandling ()
+	self.Interact = self._gui.Interaction;
+end
+
+GuiController.__index = GuiController;
+return GC;

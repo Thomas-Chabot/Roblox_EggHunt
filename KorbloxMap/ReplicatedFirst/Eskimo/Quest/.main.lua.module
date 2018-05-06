@@ -1,0 +1,41 @@
+-- Controls the EskimoQuest dialog.
+
+local EskimoQuest = { };
+local EQ          = { };
+
+local replStorage = game:GetService ("ReplicatedStorage");
+local modules     = replStorage:WaitForChild ("Modules");
+local Dialog      = require (modules.Dialog);
+
+function EQ.new ()
+	return setmetatable ({
+		Confirm = Instance.new ("BindableEvent")
+	}, EskimoQuest);
+end
+
+function EskimoQuest:run ()
+	if (self._dialog and not self._dialog.Removed) then return end
+	
+	self._dialog = self:_createDialog ();
+	self:_connectEvents ();
+end
+
+function EskimoQuest:_connectEvents ()
+	self._dialog.Confirm.Event:connect (function ()
+		self.Confirm:Fire ()
+	end)
+end
+
+function EskimoQuest:_createDialog ()
+	return Dialog.new ({
+		"Oh, hello there, traveler from a different dimension.",
+		"You come here to seek the frozen gem, no?",
+		"I hear it is beyond the great Ice wall of Korblox Mountains, but it is almost impossible to break.",
+		"Maybe we can find something to put it to the test?"
+		}, {
+		confirmation = true
+	});
+end
+
+EskimoQuest.__index = EskimoQuest;
+return EQ;

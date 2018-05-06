@@ -1,0 +1,18 @@
+local Animation = { };
+
+Animation.Types = {
+	Text = "Text"
+}
+
+local modules = {
+	Text = require (script.Text)
+}
+
+function Animation.Run (typ, ...)
+	local mod = modules [typ];
+	if (not mod) then return false end
+	
+	return mod (...)
+end
+
+return Animation;

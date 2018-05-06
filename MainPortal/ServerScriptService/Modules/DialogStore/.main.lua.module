@@ -1,0 +1,44 @@
+--[[
+	The DialogStore module deals with the DataStore for handling
+	  players who have gone through the dialog.
+
+	It supports two methods:
+		addPlayer (playerId : Integer)
+		  Adds a player to the storage
+		checkPlayer (playerId : Integer) : Boolean
+		  Checks if a player has completed the dialog; returns true if so, false otherwise.
+--]]
+
+local DialogStore = { };
+local DS          = { };
+
+local DataStoreService = game:GetService("DataStoreService");
+
+function DS.new ()
+	return setmetatable({
+		_datastore = DataStoreService:GetDataStore("DialogCompletionData")
+	}, DialogStore);
+end
+
+function DialogStore:addPlayer (playerId)
+	self:_protected (function ()
+		self._datastore:SetAsync(playerId, true);
+	end)
+end
+
+function DialogStore:checkPlayer (playerId)
+	return self:_protected (function ()
+		return self._datastore:GetAsync (playerId);
+	end)
+end
+
+function DialogStore:_protected (f)
+	local result = false;
+	pcall (function ()
+		result = f();
+	end)
+	return result;
+end
+
+DialogStore.__index = DialogStore;
+return DS;

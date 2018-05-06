@@ -1,0 +1,10 @@
+local modules = game:GetService ("ReplicatedStorage"):WaitForChild ("Modules");
+local Egg     = require (modules.Egg);
+
+return function (egg)
+	local eggIcon       = egg.Icon;
+	local clickDetector = egg.ClickDetector;
+	local placeId       = clickDetector.PlaceId.Value;
+	
+	return Egg.new (egg, clickDetector, eggIcon, placeId);
+end

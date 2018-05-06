@@ -1,0 +1,5 @@
+wait()
+player = game.Players.LocalPlayer
+cam = game.Workspace.CurrentCamera
+cam.CameraType = Enum.CameraType.Scriptable
+cam.CFrame = game.Workspace.CameraPosition.CFrame

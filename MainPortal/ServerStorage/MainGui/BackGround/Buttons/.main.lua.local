@@ -1,0 +1,26 @@
+local player = game.Players.LocalPlayer
+local nextBtn = script.Parent.Next
+local prevBtn = script.Parent.Prev
+local uis = game:GetService("UserInputService")
+local textc = game.ReplicatedStorage.TextChange
+
+local doNext = function() textc:FireServer("Next") end
+local doPrev = function() textc:FireServer("Prev") end
+
+uis.InputBegan:connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		if input.KeyCode == Enum.KeyCode.Right then
+			doNext ();
+		elseif input.KeyCode == Enum.KeyCode.Left then
+			doPrev ();
+		end
+	end
+end)
+
+nextBtn.MouseButton1Click:connect(function()
+	doNext ();
+end)
+
+prevBtn.MouseButton1Click:connect(function()
+	doPrev ();
+end)

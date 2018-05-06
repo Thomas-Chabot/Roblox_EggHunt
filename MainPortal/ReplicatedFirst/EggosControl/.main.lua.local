@@ -1,0 +1,21 @@
+local replStorage = game:GetService("ReplicatedStorage");
+local dialogEndEvt = replStorage:WaitForChild("DialogEnded");
+
+local eggos = {"BlueEgg", "GreenEgg", "PurpleEgg", "RedEgg", "WhiteEgg", "YellowEgg"};
+local eggInit = require (script.Init);
+
+function find (name)
+	return workspace:FindFirstChild (name);
+end
+
+function init ()
+	for _,egg in pairs (eggos) do
+		local eggObj = find (egg);
+		if (not eggObj) then print ("Could not find", egg); end
+		
+		eggInit (eggObj);
+	end
+end
+
+--init()
+dialogEndEvt.OnClientEvent:connect (init);

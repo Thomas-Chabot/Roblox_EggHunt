@@ -1,0 +1,18 @@
+local Icon = { };
+local I    = { };
+
+function I.new (icon)
+	return setmetatable({
+		_icon = icon
+	}, Icon);
+end
+
+function Icon:show ()
+	self._icon.Enabled = true;
+end
+function Icon:hide ()
+	self._icon.Enabled = false;
+end
+
+Icon.__index = Icon;
+return I;

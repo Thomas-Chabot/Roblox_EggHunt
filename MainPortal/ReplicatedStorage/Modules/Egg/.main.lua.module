@@ -1,0 +1,68 @@
+local Egg = { };
+local E   = { };
+
+local modules = game:GetService("ReplicatedStorage"):WaitForChild("Modules");
+
+local Camera = require (modules.Camera);
+local Teleport = require (modules.Teleport);
+local Icon     = require (modules.Icon);
+
+local DEF_ZOOM = 0.4;
+
+function E.new (eggPart, eggClicker, eggIcon, placeId, zoomPercentage)
+	if (not zoomPercentage) then zoomPercentage = DEF_ZOOM; end
+	
+	local egg = setmetatable ({
+		_part          = eggPart,
+		_clickDetector = eggClicker,
+		_zoom          = zoomPercentage,
+		
+		_camera        = Camera.new (),
+		_tp            = Teleport.new (placeId),
+		_icon          = Icon.new (eggIcon)
+	}, Egg);
+	
+	egg:_init ();
+	return egg;
+end
+
+function Egg:_init ()
+	self:_initEvents ();
+end
+function Egg:_initEvents ()
+	local cd = self._clickDetector;
+	
+	cd.MouseHoverEnter:connect (function() self:_hovered(); end);
+	cd.MouseHoverLeave:connect (function() self:_hoverLeft(); end);
+	cd.MouseClick:connect (function() self:_teleport(); end);
+end
+
+function Egg:_hovered ()
+	self:_zoomIn ();
+	self:_showIcon ();
+end
+function Egg:_hoverLeft ()
+	self:_zoomOut ();
+	self:_hideIcon ();
+end
+
+function Egg:_zoomIn ()
+	self._camera:zoomIn (self._part.CFrame, self._zoom);
+end
+function Egg:_zoomOut ()
+	self._camera:zoomOut ();
+end
+
+function Egg:_showIcon ()
+	self._icon:show ();
+end
+function Egg:_hideIcon ()
+	self._icon:hide ();
+end
+
+function Egg:_teleport ()
+	self._tp:teleport ();
+end
+
+Egg.__index = Egg;
+return E;

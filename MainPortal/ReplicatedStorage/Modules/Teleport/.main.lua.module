@@ -1,0 +1,18 @@
+local Teleport = { };
+local Tp       = { };
+
+local TeleportService = game:GetService ("TeleportService");
+
+function Tp.new (placeId)
+	return setmetatable ({
+		_placeId = placeId
+	}, Teleport);
+end
+
+function Teleport:teleport (player)
+	print ("Teleport to place ID ", self._placeId);
+	TeleportService:Teleport(self._placeId);
+end
+
+Teleport.__index = Teleport;
+return Tp;
